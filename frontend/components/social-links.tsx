@@ -2,9 +2,9 @@
 import { FaFacebookF, FaInstagram, FaLinkedinIn } from "react-icons/fa6";
 
 interface SocialLinksProps {
-  facebook?: string;
-  instagram?: string;
-  linkedin?: string;
+  facebook?: string | null;
+  instagram?: string | null;
+  linkedin?: string | null;
 }
 
 export default function SocialLinks({

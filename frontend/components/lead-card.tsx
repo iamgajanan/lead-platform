@@ -72,9 +72,9 @@ export default function LeadCard({ lead }: LeadCardProps) {
 
         {/* Dynamic prop values fixed here: removed literal quotes */}
         <SocialLinks
-          facebook={lead.facebook}
-          instagram={lead.instagram}
-          linkedin={lead.linkedin}
+	facebook={lead.facebook ?? undefined}
+  	instagram={lead.instagram ?? undefined}
+  	linkedin={lead.linkedin ?? undefined}
         />
 
         <div className="flex gap-3 mt-4">

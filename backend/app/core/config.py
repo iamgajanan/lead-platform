@@ -8,17 +8,19 @@ class Settings(BaseSettings):
     DEBUG: bool = True
 
     HOST: str = "0.0.0.0"
-    PORT: int = 8000
+    PORT: int = 8001
 
     DATABASE_URL: str
 
     CORS_ORIGINS: list[str] = [
-        "http://localhost:3000",
+       "http://localhost:3000",
+       "https://lead.n8npi.live",
     ]
 
     model_config = SettingsConfigDict(
         env_file=".env",
         case_sensitive=True,
+        extra="ignore",
     )
 
 
