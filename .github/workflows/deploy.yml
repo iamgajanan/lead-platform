@@ -1,0 +1,46 @@
+name: Deploy to Raspberry Pi
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, Linux, ARM64]
+
+    steps:
+      - name: Update repository
+        run: |
+          cd /home/iamgajanan/Projects/lead-platform
+          git fetch origin
+          git reset --hard origin/main
+
+      - name: Install frontend dependencies
+        run: |
+          cd /home/iamgajanan/Projects/lead-platform/frontend
+          npm install
+
+      - name: Build frontend
+        run: |
+          cd /home/iamgajanan/Projects/lead-platform/frontend
+          npm run build
+
+      - name: Install backend dependencies
+        run: |
+          cd /home/iamgajanan/Projects/lead-platform/backend
+          source .venv/bin/activate
+          pip install -r requirements.txt
+
+      - name: Restart frontend
+        run: |
+          sudo systemctl restart leadfrontend
+
+      - name: Restart backend
+        run: |
+          sudo systemctl restart leadapi
+
+      - name: Verify services
+        run: |
+          systemctl is-active leadfrontend
+          systemctl is-active leadapi
