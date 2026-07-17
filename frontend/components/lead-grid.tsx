@@ -101,7 +101,7 @@ export default function LeadGrid({
   if (loading) {
     return (
       <div className="rounded-xl border bg-white p-10 text-center">
-        Searching Google Maps...
+        Searching....
       </div>
     );
   }
