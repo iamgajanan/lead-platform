@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = [
        "http://localhost:3000",
        "https://lead.n8npi.live",
+       "https://lead.omnidecoder.live",
     ]
 
     model_config = SettingsConfigDict(
