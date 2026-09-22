@@ -6,15 +6,19 @@ export interface Lead {
   address: string | null
   phone: string | null
   website: string | null
-  email: string | null
-  facebook: string | null
-  instagram: string | null
-  linkedin: string | null
+  email?: string | null
+  emails?: string[]
+  phones_from_website?: string[]
+  facebook?: string | null
+  instagram?: string | null
+  linkedin?: string | null
+  enrichment_pages?: string[]
   google_maps: string
 }
 
 export interface SearchResponse {
   success: boolean
   count: number
+  enriched?: boolean
   results: Lead[]
 }
