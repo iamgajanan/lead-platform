@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 from urllib.parse import quote
 
@@ -11,6 +12,8 @@ class GoogleMapsScraper:
     MAX_RESULTS = 100
     MAX_SCROLLS = 40
     SCROLL_WAIT_MS = 1200
+    MAX_ENRICHED_RESULTS = 25
+    ENRICHMENT_CONCURRENCY = 8
 
     async def _load_search_results(self, page):
         parser = GoogleMapsHTMLParser()
@@ -43,12 +46,48 @@ class GoogleMapsScraper:
 
             previous_count = updated_count
 
-            # Google Maps sometimes stops loading new results before the
-            # requested limit. Stop after several unchanged scrolls.
             if stable_rounds >= 4:
                 break
 
         return await page.content()
+
+    @staticmethod
+    def _empty_enrichment() -> dict:
+        return {
+            "emails": [],
+            "phones_from_website": [],
+            "facebook": [],
+            "instagram": [],
+            "linkedin": [],
+            "enrichment_pages": [],
+        }
+
+    async def _enrich_business(
+        self,
+        business: dict,
+        crawler: WebsiteCrawler,
+        semaphore: asyncio.Semaphore,
+    ) -> dict:
+        if not business.get("website"):
+            return self._empty_enrichment()
+
+        async with semaphore:
+            try:
+                enrichment = await asyncio.wait_for(
+                    crawler.enrich(business["website"]),
+                    timeout=15,
+                )
+                return {
+                    "emails": enrichment["emails"],
+                    "phones_from_website": enrichment["phones"],
+                    "facebook": enrichment["facebook"],
+                    "instagram": enrichment["instagram"],
+                    "linkedin": enrichment["linkedin"],
+                    "enrichment_pages": enrichment["pages_crawled"],
+                }
+            except Exception as exc:
+                print(f"Enrichment skipped for {business.get('website')}: {exc}")
+                return self._empty_enrichment()
 
     async def search(self, keyword: str, location: str, enrich: bool = False):
         browser = GoogleMapsBrowser()
@@ -68,7 +107,6 @@ class GoogleMapsScraper:
 
             results = GoogleMapsHTMLParser().parse(html)[: self.MAX_RESULTS]
             detail_scraper = GoogleMapsDetailsScraper()
-            crawler = WebsiteCrawler() if enrich else None
             businesses = []
 
             print(f"Discovered {len(results)} Google Maps results")
@@ -76,33 +114,30 @@ class GoogleMapsScraper:
             for index, result in enumerate(results, start=1):
                 print(f"Scraping {index}/{len(results)} -> {result['name']}")
                 details = await detail_scraper.scrape(page, result["url"])
-
-                if crawler and details.get("website"):
-                    enrichment = await crawler.enrich(details["website"])
-                    details["emails"] = enrichment["emails"]
-                    details["phones_from_website"] = enrichment["phones"]
-                    details["facebook"] = enrichment["facebook"]
-                    details["instagram"] = enrichment["instagram"]
-                    details["linkedin"] = enrichment["linkedin"]
-                    details["enrichment_pages"] = enrichment["pages_crawled"]
-                elif crawler:
-                    details.update(
-                        {
-                            "emails": [],
-                            "phones_from_website": [],
-                            "facebook": [],
-                            "instagram": [],
-                            "linkedin": [],
-                            "enrichment_pages": [],
-                        }
-                    )
-
                 businesses.append(details)
+
+            if enrich:
+                crawler = WebsiteCrawler(timeout=5.0, max_pages=3)
+                semaphore = asyncio.Semaphore(self.ENRICHMENT_CONCURRENCY)
+                enrichment_targets = businesses[: self.MAX_ENRICHED_RESULTS]
+                enrichment_results = await asyncio.gather(
+                    *(
+                        self._enrich_business(business, crawler, semaphore)
+                        for business in enrichment_targets
+                    )
+                )
+
+                for business, enrichment in zip(enrichment_targets, enrichment_results):
+                    business.update(enrichment)
+
+                for business in businesses[self.MAX_ENRICHED_RESULTS :]:
+                    business.update(self._empty_enrichment())
 
             return {
                 "success": True,
                 "count": len(businesses),
                 "enriched": enrich,
+                "enrichment_limit": self.MAX_ENRICHED_RESULTS if enrich else 0,
                 "results": businesses,
             }
         finally:
