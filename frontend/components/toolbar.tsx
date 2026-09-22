@@ -53,7 +53,10 @@ export default function Toolbar({
 
         <div className="flex items-center gap-2">
           <ArrowUpDown className="h-4 w-4 text-slate-500" />
-          <Select value={sortBy} onValueChange={setSortBy}>
+          <Select
+            value={sortBy}
+            onValueChange={(value) => setSortBy(value ?? "rating")}
+          >
             <SelectTrigger className="h-10 w-[190px]">
               <SelectValue placeholder="Sort results" />
             </SelectTrigger>
