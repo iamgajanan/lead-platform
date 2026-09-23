@@ -10,9 +10,9 @@ from app.services.google_maps.details_scraper import GoogleMapsDetailsScraper
 
 class GoogleMapsScraper:
     MAX_RESULTS = 60
-    MAX_SCROLLS = 18
-    SCROLL_WAIT_MS = 350
-    STABLE_ROUNDS_LIMIT = 2
+    MAX_SCROLLS = 24
+    SCROLL_WAIT_MS = 500
+    STABLE_ROUNDS_LIMIT = 3
     DETAIL_CONCURRENCY = 16
     DETAIL_TIMEOUT_SECONDS = 10
     MAX_ENRICHED_RESULTS = 10
@@ -22,35 +22,53 @@ class GoogleMapsScraper:
     GOOGLE_MAPS_ORIGIN = "https://www.google.com"
 
     async def _load_search_results(self, page):
+        """Collect results across scrolling iterations.
+
+        Google Maps virtualizes its result list, so parsing only the final DOM
+        loses businesses that scrolled out of the viewport. Accumulate unique
+        results on every iteration instead.
+        """
         parser = GoogleMapsHTMLParser()
         feed = page.locator('div[role="feed"]').first
-        previous_count = -1
+        collected = {}
         stable_rounds = 0
 
         for _ in range(self.MAX_SCROLLS):
+            before_count = len(collected)
             html = await page.content()
-            current_count = len(parser.parse(html))
-            if current_count >= self.MAX_RESULTS:
+
+            for item in parser.parse(html):
+                collected.setdefault(item["url"], item)
+
+            if len(collected) >= self.MAX_RESULTS:
                 break
 
             if await feed.count():
-                await feed.evaluate("element => { element.scrollTop = element.scrollHeight; }")
+                await feed.evaluate(
+                    """element => {
+                        element.scrollTop = Math.min(
+                            element.scrollTop + Math.max(element.clientHeight * 0.85, 700),
+                            element.scrollHeight
+                        );
+                    }"""
+                )
             else:
-                await page.mouse.wheel(0, 5000)
+                await page.mouse.wheel(0, 1400)
 
             await page.wait_for_timeout(self.SCROLL_WAIT_MS)
-            updated_count = len(parser.parse(await page.content()))
 
-            if updated_count == previous_count:
+            for item in parser.parse(await page.content()):
+                collected.setdefault(item["url"], item)
+
+            if len(collected) == before_count:
                 stable_rounds += 1
             else:
                 stable_rounds = 0
 
-            previous_count = updated_count
             if stable_rounds >= self.STABLE_ROUNDS_LIMIT:
                 break
 
-        return await page.content()
+        return list(collected.values())[: self.MAX_RESULTS]
 
     @staticmethod
     def _empty_enrichment() -> dict:
@@ -134,9 +152,8 @@ class GoogleMapsScraper:
             await page.goto(search_url, wait_until="domcontentloaded", timeout=30000)
             await page.wait_for_selector("h1", timeout=10000)
 
-            html = await self._load_search_results(page)
-            Path("google_maps.html").write_text(html, encoding="utf-8")
-            results = GoogleMapsHTMLParser().parse(html)[: self.MAX_RESULTS]
+            results = await self._load_search_results(page)
+            Path("google_maps.html").write_text(await page.content(), encoding="utf-8")
             await page.close()
 
             print(f"Discovered {len(results)} Google Maps results")
