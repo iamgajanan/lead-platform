@@ -9,16 +9,15 @@ from app.services.google_maps.details_scraper import GoogleMapsDetailsScraper
 
 
 class GoogleMapsScraper:
-    # Keep the synchronous request bounded while retaining useful lead details.
-    MAX_RESULTS = 20
-    MAX_SCROLLS = 4
-    SCROLL_WAIT_MS = 200
-    STABLE_ROUNDS_LIMIT = 1
-    DETAIL_CONCURRENCY = 20
-    DETAIL_TIMEOUT_SECONDS = 8
-    MAX_ENRICHED_RESULTS = 5
-    ENRICHMENT_CONCURRENCY = 8
-    ENRICHMENT_TIMEOUT_SECONDS = 2
+    MAX_RESULTS = 60
+    MAX_SCROLLS = 18
+    SCROLL_WAIT_MS = 350
+    STABLE_ROUNDS_LIMIT = 2
+    DETAIL_CONCURRENCY = 16
+    DETAIL_TIMEOUT_SECONDS = 10
+    MAX_ENRICHED_RESULTS = 10
+    ENRICHMENT_CONCURRENCY = 6
+    ENRICHMENT_TIMEOUT_SECONDS = 5
 
     GOOGLE_MAPS_ORIGIN = "https://www.google.com"
 
@@ -37,7 +36,7 @@ class GoogleMapsScraper:
             if await feed.count():
                 await feed.evaluate("element => { element.scrollTop = element.scrollHeight; }")
             else:
-                await page.mouse.wheel(0, 4000)
+                await page.mouse.wheel(0, 5000)
 
             await page.wait_for_timeout(self.SCROLL_WAIT_MS)
             updated_count = len(parser.parse(await page.content()))
@@ -132,8 +131,8 @@ class GoogleMapsScraper:
             query = quote(f"{keyword} {location}")
             search_url = f"https://www.google.com/maps/search/{query}"
             print(f"Searching : {search_url}")
-            await page.goto(search_url, wait_until="commit", timeout=20000)
-            await page.wait_for_selector("h1", timeout=6000)
+            await page.goto(search_url, wait_until="domcontentloaded", timeout=30000)
+            await page.wait_for_selector("h1", timeout=10000)
 
             html = await self._load_search_results(page)
             Path("google_maps.html").write_text(html, encoding="utf-8")
@@ -147,7 +146,7 @@ class GoogleMapsScraper:
             )
 
             if enrich:
-                crawler = WebsiteCrawler(timeout=1.5, max_pages=1)
+                crawler = WebsiteCrawler(timeout=3.0, max_pages=2)
                 enrichment_semaphore = asyncio.Semaphore(self.ENRICHMENT_CONCURRENCY)
                 enrichment_targets = [
                     business for business in businesses[: self.MAX_ENRICHED_RESULTS]
