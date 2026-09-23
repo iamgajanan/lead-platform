@@ -1,6 +1,6 @@
 import asyncio
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, urljoin
 
 from app.services.enrichment.website_crawler import WebsiteCrawler
 from app.services.google_maps.browser import GoogleMapsBrowser
@@ -19,6 +19,8 @@ class GoogleMapsScraper:
     MAX_ENRICHED_RESULTS = 5
     ENRICHMENT_CONCURRENCY = 8
     ENRICHMENT_TIMEOUT_SECONDS = 2
+
+    GOOGLE_MAPS_ORIGIN = "https://www.google.com"
 
     async def _load_search_results(self, page):
         parser = GoogleMapsHTMLParser()
@@ -79,17 +81,23 @@ class GoogleMapsScraper:
             "google_maps": result.get("url"),
         }
 
+    def _absolute_maps_url(self, url: str) -> str:
+        return urljoin(self.GOOGLE_MAPS_ORIGIN, url)
+
     async def _scrape_business(self, browser, result: dict, semaphore: asyncio.Semaphore) -> dict:
         async with semaphore:
             page = await browser.new_page()
+            maps_url = self._absolute_maps_url(result["url"])
             try:
                 return await asyncio.wait_for(
-                    GoogleMapsDetailsScraper().scrape(page, result["url"]),
+                    GoogleMapsDetailsScraper().scrape(page, maps_url),
                     timeout=self.DETAIL_TIMEOUT_SECONDS,
                 )
             except Exception as exc:
-                print(f"Details skipped for {result.get('name')}: {exc}")
-                return self._fallback_business(result)
+                print(f"Details skipped for {result.get('name')} ({maps_url}): {exc}")
+                fallback = self._fallback_business(result)
+                fallback["google_maps"] = maps_url
+                return fallback
             finally:
                 await page.close()
 
