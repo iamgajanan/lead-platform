@@ -2,7 +2,6 @@ from playwright.async_api import async_playwright
 
 
 class GoogleMapsBrowser:
-
     def __init__(self, headless: bool = True):
         self.headless = headless
         self.playwright = None
@@ -10,9 +9,7 @@ class GoogleMapsBrowser:
         self.context = None
 
     async def start(self):
-
         self.playwright = await async_playwright().start()
-
         self.browser = await self.playwright.chromium.launch(
             headless=self.headless,
             args=[
@@ -33,24 +30,25 @@ class GoogleMapsBrowser:
             ),
         )
 
-    async def new_page(self):
+        await self.context.route(
+            "**/*",
+            lambda route: route.abort()
+            if route.request.resource_type in {"image", "media", "font"}
+            else route.continue_(),
+        )
 
+    async def new_page(self):
         if not self.context:
             raise RuntimeError("Browser not started")
 
         page = await self.context.new_page()
-
-        page.set_default_timeout(60000)
-
+        page.set_default_timeout(5000)
         return page
 
     async def close(self):
-
         if self.context:
             await self.context.close()
-
         if self.browser:
             await self.browser.close()
-
         if self.playwright:
             await self.playwright.stop()

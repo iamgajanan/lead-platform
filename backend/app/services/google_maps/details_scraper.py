@@ -1,8 +1,7 @@
 import re
+from typing import Optional
 
 from playwright.async_api import Page
-
-from typing import Optional
 
 
 def clean_text(value: Optional[str]) -> Optional[str]:
@@ -29,8 +28,8 @@ def clean_phone(value: Optional[str]) -> Optional[str]:
 
 class GoogleMapsDetailsScraper:
     async def scrape(self, page: Page, url: str):
-        await page.goto(url, wait_until="domcontentloaded", timeout=25000)
-        await page.wait_for_timeout(800)
+        await page.goto(url, wait_until="domcontentloaded", timeout=12000)
+        await page.locator("h1").first.wait_for(state="visible", timeout=3000)
 
         business = {
             "name": None,
@@ -48,60 +47,60 @@ class GoogleMapsDetailsScraper:
         }
 
         try:
-            business["name"] = clean_text(await page.locator("h1").first.inner_text())
+            business["name"] = clean_text(await page.locator("h1").first.inner_text(timeout=1000))
         except Exception as exc:
             print("Name Error:", exc)
 
         try:
             stars = page.locator('span[role="img"]')
             for i in range(await stars.count()):
-                aria = await stars.nth(i).get_attribute("aria-label")
+                aria = await stars.nth(i).get_attribute("aria-label", timeout=500)
                 if aria and "star" in aria.lower():
                     match = re.search(r"([0-9.]+)", aria)
                     if match:
                         business["rating"] = float(match.group(1))
                     break
-        except Exception as exc:
-            print("Rating Error:", exc)
+        except Exception:
+            pass
 
         try:
             reviews = page.locator('button[jsaction*="pane.reviewChart"]')
             if await reviews.count():
-                review_text = await reviews.first.inner_text()
+                review_text = await reviews.first.inner_text(timeout=500)
                 match = re.search(r"([\d,]+)", review_text)
                 if match:
                     business["reviews"] = int(match.group(1).replace(",", ""))
-        except Exception as exc:
-            print("Reviews Error:", exc)
+        except Exception:
+            pass
 
         try:
             category = page.locator('button[jsaction*="pane.rating.category"]')
             if await category.count():
-                business["category"] = clean_text(await category.first.inner_text())
-        except Exception as exc:
-            print("Category Error:", exc)
+                business["category"] = clean_text(await category.first.inner_text(timeout=500))
+        except Exception:
+            pass
 
         try:
             address = page.locator('button[data-item-id="address"]')
             if await address.count():
-                business["address"] = clean_text(await address.first.inner_text())
-        except Exception as exc:
-            print("Address Error:", exc)
+                business["address"] = clean_text(await address.first.inner_text(timeout=500))
+        except Exception:
+            pass
 
         try:
             phone = page.locator('button[data-item-id^="phone"]')
             if await phone.count():
-                business["phone"] = clean_phone(await phone.first.inner_text())
-        except Exception as exc:
-            print("Phone Error:", exc)
+                business["phone"] = clean_phone(await phone.first.inner_text(timeout=500))
+        except Exception:
+            pass
 
         try:
             website = page.locator('a[data-item-id="authority"]')
             if await website.count():
-                href = await website.first.get_attribute("href")
+                href = await website.first.get_attribute("href", timeout=500)
                 if href:
                     business["website"] = href.split("?")[0]
-        except Exception as exc:
-            print("Website Error:", exc)
+        except Exception:
+            pass
 
         return business

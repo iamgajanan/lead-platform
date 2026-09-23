@@ -9,20 +9,21 @@ from app.services.google_maps.details_scraper import GoogleMapsDetailsScraper
 
 
 class GoogleMapsScraper:
-    MAX_RESULTS = 100
-    MAX_SCROLLS = 25
-    SCROLL_WAIT_MS = 500
-    STABLE_ROUNDS_LIMIT = 2
-    DETAIL_CONCURRENCY = 12
-    DETAIL_TIMEOUT_SECONDS = 7
-    MAX_ENRICHED_RESULTS = 10
-    ENRICHMENT_CONCURRENCY = 4
-    ENRICHMENT_TIMEOUT_SECONDS = 8
+    # Keep the synchronous request bounded and predictable.
+    MAX_RESULTS = 30
+    MAX_SCROLLS = 8
+    SCROLL_WAIT_MS = 250
+    STABLE_ROUNDS_LIMIT = 1
+    DETAIL_CONCURRENCY = 24
+    DETAIL_TIMEOUT_SECONDS = 4
+    MAX_ENRICHED_RESULTS = 5
+    ENRICHMENT_CONCURRENCY = 8
+    ENRICHMENT_TIMEOUT_SECONDS = 2
 
     async def _load_search_results(self, page):
         parser = GoogleMapsHTMLParser()
         feed = page.locator('div[role="feed"]').first
-        previous_count = 0
+        previous_count = -1
         stable_rounds = 0
 
         for _ in range(self.MAX_SCROLLS):
@@ -34,11 +35,10 @@ class GoogleMapsScraper:
             if await feed.count():
                 await feed.evaluate("element => { element.scrollTop = element.scrollHeight; }")
             else:
-                await page.mouse.wheel(0, 5000)
+                await page.mouse.wheel(0, 4000)
 
             await page.wait_for_timeout(self.SCROLL_WAIT_MS)
-            updated_html = await page.content()
-            updated_count = len(parser.parse(updated_html))
+            updated_count = len(parser.parse(await page.content()))
 
             if updated_count == previous_count:
                 stable_rounds += 1
@@ -124,8 +124,8 @@ class GoogleMapsScraper:
             query = quote(f"{keyword} {location}")
             search_url = f"https://www.google.com/maps/search/{query}"
             print(f"Searching : {search_url}")
-            await page.goto(search_url, wait_until="domcontentloaded", timeout=60000)
-            await page.wait_for_selector("h1", timeout=15000)
+            await page.goto(search_url, wait_until="domcontentloaded", timeout=30000)
+            await page.wait_for_selector("h1", timeout=8000)
 
             html = await self._load_search_results(page)
             Path("google_maps.html").write_text(html, encoding="utf-8")
@@ -139,7 +139,7 @@ class GoogleMapsScraper:
             )
 
             if enrich:
-                crawler = WebsiteCrawler(timeout=3.0, max_pages=2)
+                crawler = WebsiteCrawler(timeout=1.5, max_pages=1)
                 enrichment_semaphore = asyncio.Semaphore(self.ENRICHMENT_CONCURRENCY)
                 enrichment_targets = [
                     business for business in businesses[: self.MAX_ENRICHED_RESULTS]
