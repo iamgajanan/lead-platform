@@ -10,13 +10,14 @@ from app.services.google_maps.details_scraper import GoogleMapsDetailsScraper
 
 class GoogleMapsScraper:
     MAX_RESULTS = 100
-    MAX_SCROLLS = 40
-    SCROLL_WAIT_MS = 1200
-    DETAIL_CONCURRENCY = 6
-    DETAIL_TIMEOUT_SECONDS = 12
+    MAX_SCROLLS = 25
+    SCROLL_WAIT_MS = 500
+    STABLE_ROUNDS_LIMIT = 2
+    DETAIL_CONCURRENCY = 12
+    DETAIL_TIMEOUT_SECONDS = 7
     MAX_ENRICHED_RESULTS = 10
     ENRICHMENT_CONCURRENCY = 4
-    ENRICHMENT_TIMEOUT_SECONDS = 12
+    ENRICHMENT_TIMEOUT_SECONDS = 8
 
     async def _load_search_results(self, page):
         parser = GoogleMapsHTMLParser()
@@ -45,7 +46,7 @@ class GoogleMapsScraper:
                 stable_rounds = 0
 
             previous_count = updated_count
-            if stable_rounds >= 4:
+            if stable_rounds >= self.STABLE_ROUNDS_LIMIT:
                 break
 
         return await page.content()
@@ -138,7 +139,7 @@ class GoogleMapsScraper:
             )
 
             if enrich:
-                crawler = WebsiteCrawler(timeout=4.0, max_pages=2)
+                crawler = WebsiteCrawler(timeout=3.0, max_pages=2)
                 enrichment_semaphore = asyncio.Semaphore(self.ENRICHMENT_CONCURRENCY)
                 enrichment_targets = [
                     business for business in businesses[: self.MAX_ENRICHED_RESULTS]
