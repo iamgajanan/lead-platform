@@ -9,13 +9,13 @@ from app.services.google_maps.details_scraper import GoogleMapsDetailsScraper
 
 
 class GoogleMapsScraper:
-    # Keep the synchronous request bounded and predictable.
-    MAX_RESULTS = 30
-    MAX_SCROLLS = 8
-    SCROLL_WAIT_MS = 250
+    # Keep the synchronous request bounded while retaining useful lead details.
+    MAX_RESULTS = 20
+    MAX_SCROLLS = 4
+    SCROLL_WAIT_MS = 200
     STABLE_ROUNDS_LIMIT = 1
-    DETAIL_CONCURRENCY = 24
-    DETAIL_TIMEOUT_SECONDS = 4
+    DETAIL_CONCURRENCY = 20
+    DETAIL_TIMEOUT_SECONDS = 8
     MAX_ENRICHED_RESULTS = 5
     ENRICHMENT_CONCURRENCY = 8
     ENRICHMENT_TIMEOUT_SECONDS = 2
@@ -124,8 +124,8 @@ class GoogleMapsScraper:
             query = quote(f"{keyword} {location}")
             search_url = f"https://www.google.com/maps/search/{query}"
             print(f"Searching : {search_url}")
-            await page.goto(search_url, wait_until="domcontentloaded", timeout=30000)
-            await page.wait_for_selector("h1", timeout=8000)
+            await page.goto(search_url, wait_until="commit", timeout=20000)
+            await page.wait_for_selector("h1", timeout=6000)
 
             html = await self._load_search_results(page)
             Path("google_maps.html").write_text(html, encoding="utf-8")
